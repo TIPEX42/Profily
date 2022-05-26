@@ -18,6 +18,13 @@ struct FunctionCall
 	std::string name;
 };
 
+struct FuncTime
+{
+	int64_t time_sec;
+	int64_t time_usec;
+	bool operator<(const FuncTime other) const;
+};
+
 class Application
 {
 public:
@@ -30,6 +37,8 @@ private:
 
 	inline static std::map<int64_t, std::string> functionsDict;
 	inline static std::vector<FunctionCall> functionCalls;
+	inline static std::multimap<FuncTime, std::string> functionHotTrace;
+	inline static std::vector<std::string> calledFunctionsNames;
 	inline static int64_t mainOffset;
 	inline static int64_t programTimeOffset_sec;
 	inline static int64_t programTimeOffset_usec;
@@ -38,9 +47,11 @@ private:
 	inline static int64_t profileCount = 0;
 
 	static std::vector<std::string> GetCommandOutput(std::string &command);
+	static bool ContainsCalledFunction(std::string &name);
 
 	static void InitializeFunctionDict();
 	static void InitializeFunctionCalls();
+	static void InitializeFunctionHotTrace();
 	static void CreateJson();
 	static void AddFunctionCall(std::ifstream &stream, const std::string &address, int64_t ts_sec, int64_t ts_usec);
 };

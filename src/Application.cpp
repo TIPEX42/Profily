@@ -14,6 +14,18 @@ void Application::Start(std::string _programToProfile)
 
 	InitializeFunctionDict();
 	InitializeFunctionCalls();
+	InitializeFunctionHotTrace();
+
+	for (auto &func : calledFunctionsNames)
+	{
+		std::cout << "[" << func << "] Was used and profiled" << std::endl;
+	}
+
+	for (auto &func : functionHotTrace)
+	{
+		std::cout << "[" << func.second << "] Took: " << func.first.time_sec * 1000000 + func.first.time_usec << "us" << std::endl;
+	}
+
 	CreateJson();
 }
 
@@ -95,6 +107,8 @@ void Application::AddFunctionCall(std::ifstream &stream, const std::string &addr
 			programEndTime_sec = call.end_time_sec;
 			programEndTime_usec = call.end_time_usec;
 			functionCalls.emplace_back(call);
+			if (!ContainsCalledFunction(call.name))
+				calledFunctionsNames.emplace_back(call.name);
 			return ;
 		}
 		else
@@ -103,6 +117,16 @@ void Application::AddFunctionCall(std::ifstream &stream, const std::string &addr
 	call.end_time_sec = programEndTime_sec;
 	call.end_time_usec = programEndTime_usec;
 	functionCalls.emplace_back(call);
+	if (!ContainsCalledFunction(call.name))
+		calledFunctionsNames.emplace_back(call.name);
+}
+
+bool Application::ContainsCalledFunction(std::string &name)
+{
+	for (auto &func: calledFunctionsNames)
+		if (func == name)
+			return true;
+	return false;
 }
 
 std::vector<std::string> Application::GetCommandOutput(std::string &command)
@@ -158,4 +182,37 @@ void Application::CreateJson()
 	// Footer
 	outputStream << "]}";
 	outputStream.flush();
+}
+
+void Application::InitializeFunctionHotTrace()
+{
+	for (auto &func : calledFunctionsNames)
+	{
+		int64_t time_sec = 0, time_usec = 0;
+
+		for (auto &call: functionCalls)
+		{
+			if (call.name == func)
+			{
+				time_sec += call.end_time_sec - call.start_time_sec;
+				time_usec += call.end_time_usec - call.start_time_usec;
+			}
+		}
+		while (time_usec > 1000000)
+		{
+			time_sec++;
+			time_usec -= 1000000;
+		}
+		FuncTime time{time_sec, time_usec};
+		functionHotTrace.emplace(time, func);
+	}
+}
+
+bool FuncTime::operator<(const FuncTime other) const
+{
+	if (time_sec > other.time_sec)
+		return false;
+	if (time_sec == other.time_sec && time_usec >= other.time_usec)
+		return false;
+	return true;
 }
