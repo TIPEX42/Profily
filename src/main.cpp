@@ -1,5 +1,4 @@
 #include <iostream>
-#include <stdio.h>
 #include "Application.h"
 
 int main(int argc, char **argv)
@@ -10,5 +9,5 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	Application::Start(300, 300, argv[1]);
+	Application::Start(argv[1]);
 }

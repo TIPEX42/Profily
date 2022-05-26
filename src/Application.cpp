@@ -5,18 +5,16 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
+#include <vector>
 #include "Application.h"
-#include "raylib.h"
 
-void Application::Start(int _width, int _height, std::string _programToProfile)
+void Application::Start(std::string _programToProfile)
 {
-	width = _width;
-	height = _height;
 	programToProfile = std::move(_programToProfile);
 
 	InitializeFunctionDict();
 	InitializeFunctionCalls();
-	//MainLoop();
+	CreateJson();
 }
 
 void Application::InitializeFunctionDict()
@@ -63,27 +61,24 @@ void Application::InitializeFunctionCalls()
 	std::string address;
 
 	timestampFile >> c >> address >> ts_sec >> ts_usec;
-	address = address.at(2);
-	mainOffset = strtoll(address.c_str(), nullptr, 16) - mainOffset;
+	mainOffset = strtoll(&address[2], nullptr, 16) - mainOffset;
+	programTimeOffset_sec = ts_sec;
+	programTimeOffset_usec = ts_usec;
 	AddFunctionCall(timestampFile, address, ts_sec, ts_usec);
-
-	for (auto &call : functionCalls)
-	{
-		std::cout << call.name << "Started at " << call.start_time << ", and ended at " << call.end_time << std::endl;
-	}
-
 }
 
 void Application::AddFunctionCall(std::ifstream &stream, const std::string &address, int64_t ts_sec, int64_t ts_usec)
 {
 	FunctionCall call{};
 
-	int64_t realAddress = strtoll(address.substr(2).c_str(), nullptr, 16) - mainOffset;
-	std::cout << realAddress << " real address\n";
+	int64_t realAddress = strtoll(&address[2], nullptr, 16) - mainOffset;
 	call.name = functionsDict[realAddress];
 	if (call.name.empty())
 		std::cout << "function address not found : " << address << std::endl;
-	call.start_time = ts_sec * 1000 + ts_usec / 1000;
+	call.start_time_sec = ts_sec - programTimeOffset_sec;
+	call.start_time_usec = ts_usec - programTimeOffset_usec;
+	programEndTime_sec = call.start_time_sec;
+	programEndTime_usec = call.start_time_usec;
 
 	char _c;
 	int64_t _ts_sec, _ts_usec;
@@ -93,34 +88,21 @@ void Application::AddFunctionCall(std::ifstream &stream, const std::string &addr
 	{
 		if (_c != '<')
 			AddFunctionCall(stream, _address, _ts_sec, _ts_usec);
-		else
+		else if (functionsDict[strtoll(&_address[2], nullptr, 16) - mainOffset] == call.name)
 		{
-			call.end_time = _ts_sec * 1000 + _ts_usec / 1000;
+			call.end_time_sec = _ts_sec - programTimeOffset_sec;
+			call.end_time_usec = _ts_usec - programTimeOffset_usec;
+			programEndTime_sec = call.end_time_sec;
+			programEndTime_usec = call.end_time_usec;
 			functionCalls.emplace_back(call);
 			return ;
 		}
+		else
+			std::cout << "End does not match start" << std::endl;
 	}
-}
-
-void Application::MainLoop()
-{
-	while (!window.ShouldClose())
-	{
-		Update();
-		Render();
-	}
-}
-
-void Application::Update()
-{
-
-}
-
-void Application::Render()
-{
-	BeginDrawing();
-	Application::window.ClearBackground(WHITE);
-	EndDrawing();
+	call.end_time_sec = programEndTime_sec;
+	call.end_time_usec = programEndTime_usec;
+	functionCalls.emplace_back(call);
 }
 
 std::vector<std::string> Application::GetCommandOutput(std::string &command)
@@ -140,4 +122,40 @@ std::vector<std::string> Application::GetCommandOutput(std::string &command)
 
 	pclose(pipe);
 	return result;
+}
+
+void Application::CreateJson()
+{
+	std::ofstream outputStream;
+	outputStream.open("result.json");
+
+	// Header
+	outputStream << "{\"otherData\": {},\"traceEvents\":[";
+	outputStream.flush();
+
+	// Functions
+	for (auto &call : functionCalls)
+	{
+		if (profileCount++ > 0)
+			outputStream << ",";
+
+		std::string name = call.name;
+		int64_t dur = (call.end_time_sec * 1000000 + call.end_time_usec) - (call.start_time_sec * 1000000 + call.start_time_usec);
+
+		outputStream << "{";
+		outputStream << "\"cat\":\"function\",";
+		outputStream << "\"dur\":" << dur << ',';
+		outputStream << "\"name\":\"" << name << "\",";
+		outputStream << "\"ph\":\"X\",";
+		outputStream << "\"pid\":0,";
+		outputStream << "\"tid\":" << 0 << ",";
+		outputStream << "\"ts\":" << call.start_time_sec * 1000000 + call.start_time_usec;
+		outputStream << "}";
+
+		outputStream.flush();
+	}
+
+	// Footer
+	outputStream << "]}";
+	outputStream.flush();
 }
