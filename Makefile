@@ -1,10 +1,9 @@
 PROJECT_DIR		:=		$(PWD)
 
-TEST_CFLAGS		:=		-g -finstrument-functions
-TEST_LDFLAGS	:=
-TEST_NAME		:=		test
+TEST_CFLAGS		:=		-g -finstrument-functions -DDEBUG_PROFILE
+TEST_NAME		:=		example
 
-TEST_SRCS		:=		test.c
+TEST_SRCS		:=		example.c profiling.c
 TEST_OBJS		:=		$(TEST_SRCS:.c=.o)
 
 PROFILY_CFLAGS		:= -Wall -Wextra -O2 -std=c++17
